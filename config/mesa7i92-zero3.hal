@@ -1,0 +1,94 @@
+# --- HostMot2 over Ethernet ---
+loadrt hostmot2
+loadrt hm2_eth board_ip=192.168.192.210
+
+# 1 kHz servo thread (adjust if needed)
+loadrt threads name1=servo-thread period1=1000000
+
+# Add hm2 functions
+addf hm2_7i92.0.read  servo-thread
+addf hm2_7i92.0.write servo-thread
+addf hm2_7i92.0.pet   servo-thread
+
+# --- Stepgens for X/Y/Z/A on P2 (2/3,4/5,6/7,8/9) ---
+# Use "position mode" (0) for normal step/dir axes
+setp hm2_7i92.0.stepgen.00.control-type 0
+setp hm2_7i92.0.stepgen.01.control-type 0
+setp hm2_7i92.0.stepgen.02.control-type 0
+setp hm2_7i92.0.stepgen.03.control-type 0
+
+# Timing â€” Zero-3 needs â‰¥2 Âµs step pulse, give margin
+setp hm2_7i92.0.stepgen.00.dirsetup   4000
+setp hm2_7i92.0.stepgen.00.dirhold    4000
+setp hm2_7i92.0.stepgen.00.steplen    3000
+setp hm2_7i92.0.stepgen.00.stepspace  3000
+setp hm2_7i92.0.stepgen.01.dirsetup   4000
+setp hm2_7i92.0.stepgen.01.dirhold    4000
+setp hm2_7i92.0.stepgen.01.steplen    3000
+setp hm2_7i92.0.stepgen.01.stepspace  3000
+setp hm2_7i92.0.stepgen.02.dirsetup   4000
+setp hm2_7i92.0.stepgen.02.dirhold    4000
+setp hm2_7i92.0.stepgen.02.steplen    3000
+setp hm2_7i92.0.stepgen.02.stepspace  3000
+setp hm2_7i92.0.stepgen.03.dirsetup   4000
+setp hm2_7i92.0.stepgen.03.dirhold    4000
+setp hm2_7i92.0.stepgen.03.steplen    3000
+setp hm2_7i92.0.stepgen.03.stepspace  3000
+
+# Scale = steps per machine unit (e.g. steps/mm)
+# Example: 200 steps/rev * 10 Âµsteps / 2 mm screw = 1000 steps/mm
+# Replace with your real values:
+setp hm2_7i92.0.stepgen.00.position-scale 1000   # X
+setp hm2_7i92.0.stepgen.01.position-scale 1000   # Y
+setp hm2_7i92.0.stepgen.02.position-scale 1000   # Z
+setp hm2_7i92.0.stepgen.03.position-scale 1000   # A/C
+
+# Reasonable limits (tune per machine)
+setp hm2_7i92.0.stepgen.00.maxvel   100.0
+setp hm2_7i92.0.stepgen.00.maxaccel 1000.0
+setp hm2_7i92.0.stepgen.01.maxvel   100.0
+setp hm2_7i92.0.stepgen.01.maxaccel 1000.0
+setp hm2_7i92.0.stepgen.02.maxvel   100.0
+setp hm2_7i92.0.stepgen.02.maxaccel 1000.0
+setp hm2_7i92.0.stepgen.03.maxvel   100.0
+setp hm2_7i92.0.stepgen.03.maxaccel 1000.0
+
+# --- Spindle PWM on P2-17 (PWM0) ---
+# One PWM frequency for all channels:
+setp hm2_7i92.0.pwmgen.pwm_frequency 1000      # 1 kHz is a safe starting point
+setp hm2_7i92.0.pwmgen.00.scale      18000     # = your max spindle RPM (example 18000)
+# Enable PWM when spindle is on; value is RPM-to-duty scaling
+net spindle-on     iocontrol.0.spindle-on     => hm2_7i92.0.pwmgen.00.enable
+net spindle-speed  motion.spindle-speed-out   => hm2_7i92.0.pwmgen.00.value
+
+# --- Relays on P2-1 (gpio.000) and P2-14 (gpio.001) ---
+# Configure as outputs
+setp hm2_7i92.0.gpio.000.is_output true   # P2-1  -> Relay1 (Spindle power)
+setp hm2_7i92.0.gpio.001.is_output true   # P2-14 -> Relay2 (Coolant/Vac)
+# Drive from LinuxCNC IO
+net spindle-power iocontrol.0.spindle-on  => hm2_7i92.0.gpio.000.out
+net coolant-mist  iocontrol.0.coolant-mist => hm2_7i92.0.gpio.001.out
+
+# --- E-Stop (low-active) and Home inputs on P2-11/10/12/13 ---
+# P2-11 -> E-Stop, P2-10 -> Z home, P2-12 -> Y home, P2-13 -> X home
+# In this bitfile P2-10..13 map to gpio.013/.014/.015/.016 as inputs.
+loadrt not count=1
+addf not.0 servo-thread
+# E-Stop is low-active: invert it
+net estop-raw   hm2_7i92.0.gpio.014.in => not.0.in      # P2-11
+net estop-in    not.0.out              => motion.e-stop-in
+# Homes (active-high expected here; invert if your switches are wired NC)
+net home-z      hm2_7i92.0.gpio.013.in => joint.2.home-sw-in   # P2-10
+net home-y      hm2_7i92.0.gpio.015.in => joint.1.home-sw-in   # P2-12
+net home-x      hm2_7i92.0.gpio.016.in => joint.0.home-sw-in   # P2-13
+
+# --- Charge-pump / Watchdog on P2-16 (StepGen4 STEP) ---
+# Reserve StepGen 4 as a fixed-frequency generator (velocity mode)
+setp hm2_7i92.0.stepgen.04.control-type   1       # 1 = velocity mode
+setp hm2_7i92.0.stepgen.04.position-scale 1
+setp hm2_7i92.0.stepgen.04.maxvel         20000
+setp hm2_7i92.0.stepgen.04.maxaccel       1e9
+setp hm2_7i92.0.stepgen.04.enable         1
+
+# Many Mach3-style charge-pump inputs expect ~10â€“12.5 kHz. Start at 12.5 kHz:
+setp hm2_7i92.0.stepgen.04.velocity-cmd   12500
