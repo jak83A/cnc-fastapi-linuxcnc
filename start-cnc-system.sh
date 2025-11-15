@@ -23,7 +23,7 @@ NC='\033[0m'
 MESA_IP="10.10.10.11"
 LINUXCNC_DIR="$HOME/linuxcnc"
 PROJECT_DIR="$HOME/PycharmProjects"
-CONFIG_DIR="$PROJECT_DIR/linuxcnc_configs/zero3-mesa7i92"
+CONFIG_DIR="$LINUXCNC_DIR/configs/zero3-mesa7i92"
 CONFIG_FILE="$CONFIG_DIR/zero3-mesa7i92.ini"
 LINUXCNC_LOG="/tmp/linuxcnc_startup.log"
 
