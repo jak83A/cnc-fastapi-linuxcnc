@@ -1,10 +1,8 @@
-
-
 #!/bin/bash
 # =============================================================================
-# CNC Control System - Working Startup Script
+# CNC Control System - Complete Startup Script (LinuxCNC + FastAPI)
 # =============================================================================
-# Fixed version - addresses DISPLAY and nohup issues
+# Starts LinuxCNC in headless mode, then launches FastAPI application
 # =============================================================================
 
 set -e
@@ -14,157 +12,296 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
-# Configuration
+# ============================================================================
+# CONFIGURATION - Update these paths for your system
+# ============================================================================
+
+# LinuxCNC Configuration
 MESA_IP="10.10.10.11"
 LINUXCNC_DIR="$HOME/linuxcnc"
 PROJECT_DIR="$HOME/PycharmProjects"
 CONFIG_DIR="$PROJECT_DIR/linuxcnc_configs/zero3-mesa7i92"
 CONFIG_FILE="$CONFIG_DIR/zero3-mesa7i92.ini"
-LOG_FILE="/tmp/linuxcnc_startup.log"
+LINUXCNC_LOG="/tmp/linuxcnc_startup.log"
 
-# Print header
-echo -e "${BLUE}╔════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║   CNC Control System - Complete Startup       ║${NC}"
-echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}"
-echo ""
+# FastAPI Configuration
+FASTAPI_PROJECT_DIR="$PROJECT_DIR/linuxcnc-fastapi-controller"  # UPDATE THIS!
+VENV_PATH="$FASTAPI_PROJECT_DIR/venv"                           # Virtual environment path
+FASTAPI_APP="app.main:app"                                       # Format: module.file:app_instance
+FASTAPI_HOST="0.0.0.0"                                          # 0.0.0.0 = accessible from network
+FASTAPI_PORT=8000
+FASTAPI_LOG="/tmp/fastapi.log"
+FASTAPI_PID_FILE="/tmp/fastapi.pid"
 
-# Check Mesa connection
-echo -e "${YELLOW}[1/5]${NC} Checking Mesa 7i92 connection..."
-if ping -c 1 -W 1 "$MESA_IP" &> /dev/null; then
-    echo -e "${GREEN}✓${NC} Mesa 7i92 card responding at $MESA_IP"
-else
-    echo -e "${RED}✗${NC} Cannot reach Mesa 7i92 at $MESA_IP"
-    exit 1
-fi
-echo ""
+# ============================================================================
+# FUNCTIONS
+# ============================================================================
 
-# Load LinuxCNC RIP environment
-echo -e "${YELLOW}[2/5]${NC} Loading LinuxCNC environment..."
-cd "$LINUXCNC_DIR"
-source ./scripts/rip-environment
+print_header() {
+    echo -e "${BLUE}╔════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║   CNC Control System - Complete Startup       ║${NC}"
+    echo -e "${BLUE}║   LinuxCNC + FastAPI REST API                  ║${NC}"
+    echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}"
+    echo ""
+}
 
-if command -v linuxcnc &> /dev/null; then
-    echo -e "${GREEN}✓${NC} LinuxCNC environment loaded"
-else
-    echo -e "${RED}✗${NC} LinuxCNC not available after sourcing RIP"
-    exit 1
-fi
-echo ""
+check_mesa() {
+    echo -e "${YELLOW}[1/6]${NC} Checking Mesa 7i92 connection..."
+    if ping -c 1 -W 1 "$MESA_IP" &> /dev/null; then
+        echo -e "${GREEN}✓${NC} Mesa 7i92 card responding at $MESA_IP"
+    else
+        echo -e "${RED}✗${NC} Cannot reach Mesa 7i92 at $MESA_IP"
+        exit 1
+    fi
+    echo ""
+}
 
-# Stop existing LinuxCNC
-echo -e "${YELLOW}[3/5]${NC} Checking for existing LinuxCNC processes..."
-if pgrep -f "linuxcnc.*\.ini" > /dev/null; then
-    echo "     Stopping existing LinuxCNC..."
-    pkill -f "linuxcnc.*\.ini" 2>/dev/null || true
-    sleep 2
-fi
-echo -e "${GREEN}✓${NC} No conflicting processes"
-echo ""
+load_linuxcnc_env() {
+    echo -e "${YELLOW}[2/6]${NC} Loading LinuxCNC environment..."
+    cd "$LINUXCNC_DIR"
+    source ./scripts/rip-environment
 
-# Check config
-echo -e "${YELLOW}[4/5]${NC} Verifying configuration..."
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo -e "${RED}✗${NC} Config file not found: $CONFIG_FILE"
-    exit 1
-fi
-echo -e "${GREEN}✓${NC} Configuration file present"
-echo ""
+    if command -v linuxcnc &> /dev/null; then
+        echo -e "${GREEN}✓${NC} LinuxCNC environment loaded"
+    else
+        echo -e "${RED}✗${NC} LinuxCNC not available after sourcing RIP"
+        exit 1
+    fi
+    echo ""
+}
 
-# Start LinuxCNC
-echo -e "${YELLOW}[5/5]${NC} Starting LinuxCNC in headless mode..."
-
-# Clear log
-> "$LOG_FILE"
-
-# CRITICAL FIX: Start Xvfb if not running, or use existing display
-if command -v Xvfb &> /dev/null; then
-    if ! pgrep -x "Xvfb" > /dev/null; then
-        echo "     Starting Xvfb virtual display..."
-        Xvfb :1 -screen 0 1024x768x24 &> /dev/null &
+stop_existing_processes() {
+    echo -e "${YELLOW}[3/6]${NC} Checking for existing processes..."
+    
+    # Stop existing LinuxCNC
+    if pgrep -f "linuxcnc.*\.ini" > /dev/null; then
+        echo "     Stopping existing LinuxCNC..."
+        pkill -f "linuxcnc.*\.ini" 2>/dev/null || true
         sleep 2
     fi
-    export DISPLAY=:1
-    echo "     Using virtual display: DISPLAY=$DISPLAY"
-else
-    # Fallback to :0 if Xvfb not available
-    export DISPLAY=:0
-    echo "     Using display: DISPLAY=$DISPLAY"
-fi
+    
+    # Stop existing FastAPI
+    if [ -f "$FASTAPI_PID_FILE" ]; then
+        OLD_PID=$(cat "$FASTAPI_PID_FILE")
+        if kill -0 "$OLD_PID" 2>/dev/null; then
+            echo "     Stopping existing FastAPI (PID: $OLD_PID)..."
+            kill "$OLD_PID" 2>/dev/null || true
+            sleep 1
+        fi
+        rm -f "$FASTAPI_PID_FILE"
+    fi
+    
+    echo -e "${GREEN}✓${NC} No conflicting processes"
+    echo ""
+}
 
-# Change to config directory
-cd "$CONFIG_DIR"
-
-# Start LinuxCNC in background with nohup
-echo "     Starting LinuxCNC process..."
-nohup linuxcnc "$CONFIG_FILE" > "$LOG_FILE" 2>&1 &
-LINUXCNC_PID=$!
-
-echo "     Waiting for LinuxCNC to initialize (PID: $LINUXCNC_PID)..."
-
-# Wait for successful startup
-MAX_WAIT=30
-SUCCESS=false
-
-for i in $(seq 1 $MAX_WAIT); do
-    # Check if process is still alive
-    if ! kill -0 $LINUXCNC_PID 2>/dev/null; then
-        echo ""
-        echo -e "${RED}✗${NC} LinuxCNC process died"
-        echo ""
-        echo "Error log:"
-        cat "$LOG_FILE" | tail -20 | sed 's/^/  /'
+verify_config() {
+    echo -e "${YELLOW}[4/6]${NC} Verifying configuration..."
+    
+    # Check LinuxCNC config
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo -e "${RED}✗${NC} LinuxCNC config not found: $CONFIG_FILE"
         exit 1
     fi
+    echo -e "${GREEN}✓${NC} LinuxCNC configuration file present"
     
-    # Check for successful startup indicators
-    if grep -q "task: main loop" "$LOG_FILE" 2>/dev/null; then
-        SUCCESS=true
-        break
+    # Check FastAPI project
+    if [ ! -d "$FASTAPI_PROJECT_DIR" ]; then
+        echo -e "${YELLOW}⚠${NC}  FastAPI project directory not found: $FASTAPI_PROJECT_DIR"
+        echo "     FastAPI will not be started. Only LinuxCNC will run."
+        SKIP_FASTAPI=true
+    else
+        echo -e "${GREEN}✓${NC} FastAPI project directory found"
+        SKIP_FASTAPI=false
     fi
     
-    # Check for task module
-    if pgrep -f "milltask" > /dev/null 2>&1; then
-        SUCCESS=true
-        break
+    # Check virtual environment
+    if [ "$SKIP_FASTAPI" = false ] && [ ! -d "$VENV_PATH" ]; then
+        echo -e "${YELLOW}⚠${NC}  Virtual environment not found: $VENV_PATH"
+        echo "     Run: python3 -m venv $VENV_PATH"
+        SKIP_FASTAPI=true
+    elif [ "$SKIP_FASTAPI" = false ]; then
+        echo -e "${GREEN}✓${NC} Virtual environment found"
     fi
     
-    # Check for errors
-    if grep -qi "error.*loading.*hal\|fatal\|cannot open" "$LOG_FILE" 2>/dev/null; then
+    echo ""
+}
+
+start_linuxcnc() {
+    echo -e "${YELLOW}[5/6]${NC} Starting LinuxCNC in headless mode..."
+    
+    # Clear log
+    > "$LINUXCNC_LOG"
+    
+    # Setup display
+    if command -v Xvfb &> /dev/null; then
+        if ! pgrep -x "Xvfb" > /dev/null; then
+            echo "     Starting Xvfb virtual display..."
+            Xvfb :1 -screen 0 1024x768x24 &> /dev/null &
+            sleep 2
+        fi
+        export DISPLAY=:1
+        echo "     Using virtual display: DISPLAY=$DISPLAY"
+    else
+        export DISPLAY=:0
+        echo "     Using display: DISPLAY=$DISPLAY"
+    fi
+    
+    # Change to config directory
+    cd "$CONFIG_DIR"
+    
+    # Start LinuxCNC
+    echo "     Starting LinuxCNC process..."
+    nohup linuxcnc "$CONFIG_FILE" > "$LINUXCNC_LOG" 2>&1 &
+    LINUXCNC_PID=$!
+    
+    echo "     Waiting for LinuxCNC to initialize (PID: $LINUXCNC_PID)..."
+    
+    # Wait for successful startup
+    MAX_WAIT=30
+    SUCCESS=false
+    
+    for i in $(seq 1 $MAX_WAIT); do
+        # Check if process is still alive
+        if ! kill -0 $LINUXCNC_PID 2>/dev/null; then
+            echo ""
+            echo -e "${RED}✗${NC} LinuxCNC process died"
+            echo ""
+            echo "Error log:"
+            cat "$LINUXCNC_LOG" | tail -20 | sed 's/^/  /'
+            exit 1
+        fi
+        
+        # Check for successful startup
+        if grep -q "task: main loop" "$LINUXCNC_LOG" 2>/dev/null; then
+            SUCCESS=true
+            break
+        fi
+        
+        if pgrep -f "milltask" > /dev/null 2>&1; then
+            SUCCESS=true
+            break
+        fi
+        
+        # Check for errors
+        if grep -qi "error.*loading.*hal\|fatal\|cannot open" "$LINUXCNC_LOG" 2>/dev/null; then
+            echo ""
+            echo -e "${RED}✗${NC} LinuxCNC encountered errors during startup"
+            echo ""
+            echo "Error log:"
+            grep -i "error\|fatal" "$LINUXCNC_LOG" | tail -10 | sed 's/^/  /'
+            echo ""
+            echo "Full log: cat $LINUXCNC_LOG"
+            exit 1
+        fi
+        
+        sleep 1
+        echo -n "."
+    done
+    
+    echo ""
+    
+    if [ "$SUCCESS" = true ]; then
+        echo -e "${GREEN}✓${NC} LinuxCNC started successfully (PID: $LINUXCNC_PID)"
+    else
+        echo -e "${YELLOW}⚠${NC}  Startup verification timeout"
+        echo "     Process running (PID: $LINUXCNC_PID) but couldn't verify startup"
+        echo "     Check logs: tail -f $LINUXCNC_LOG"
+    fi
+    echo ""
+}
+
+start_fastapi() {
+    if [ "$SKIP_FASTAPI" = true ]; then
+        echo -e "${YELLOW}[6/6]${NC} Skipping FastAPI (not configured)"
         echo ""
-        echo -e "${RED}✗${NC} LinuxCNC encountered errors during startup"
+        return
+    fi
+    
+    echo -e "${YELLOW}[6/6]${NC} Starting FastAPI application..."
+    
+    cd "$FASTAPI_PROJECT_DIR"
+    
+    # Activate virtual environment
+    echo "     Activating virtual environment..."
+    source "$VENV_PATH/bin/activate"
+    
+    # Clear log
+    > "$FASTAPI_LOG"
+    
+    # Start FastAPI with uvicorn
+    echo "     Starting uvicorn server..."
+    nohup uvicorn "$FASTAPI_APP" \
+        --host "$FASTAPI_HOST" \
+        --port "$FASTAPI_PORT" \
+        --log-level info \
+        > "$FASTAPI_LOG" 2>&1 &
+    
+    FASTAPI_PID=$!
+    echo "$FASTAPI_PID" > "$FASTAPI_PID_FILE"
+    
+    # Wait briefly and check if it started
+    sleep 3
+    
+    if kill -0 "$FASTAPI_PID" 2>/dev/null; then
+        echo -e "${GREEN}✓${NC} FastAPI started successfully (PID: $FASTAPI_PID)"
+        echo ""
+        echo -e "${CYAN}     API URL:  http://localhost:$FASTAPI_PORT${NC}"
+        echo -e "${CYAN}     API Docs: http://localhost:$FASTAPI_PORT/docs${NC}"
+        echo -e "${CYAN}     Redoc:    http://localhost:$FASTAPI_PORT/redoc${NC}"
+    else
+        echo -e "${RED}✗${NC} FastAPI failed to start"
         echo ""
         echo "Error log:"
-        grep -i "error\|fatal" "$LOG_FILE" | tail -10 | sed 's/^/  /'
+        cat "$FASTAPI_LOG" | tail -20 | sed 's/^/  /'
+        # Don't exit - LinuxCNC is still running
+    fi
+    echo ""
+}
+
+print_summary() {
+    echo -e "${GREEN}═══════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}  System Ready${NC}"
+    echo -e "${GREEN}═══════════════════════════════════════════════${NC}"
+    echo ""
+    echo "LinuxCNC:"
+    echo "  Configuration: $CONFIG_FILE"
+    echo "  Log file:      $LINUXCNC_LOG"
+    echo "  Monitor:       tail -f $LINUXCNC_LOG"
+    echo ""
+    
+    if [ "$SKIP_FASTAPI" = false ]; then
+        echo "FastAPI:"
+        echo "  API URL:       http://localhost:$FASTAPI_PORT"
+        echo "  Documentation: http://localhost:$FASTAPI_PORT/docs"
+        echo "  Log file:      $FASTAPI_LOG"
+        echo "  Monitor:       tail -f $FASTAPI_LOG"
         echo ""
-        echo "Full log: cat $LOG_FILE"
-        exit 1
     fi
     
-    sleep 1
-    echo -n "."
-done
+    echo "Commands:"
+    echo "  Stop LinuxCNC: pkill -f 'linuxcnc.*\\.ini'"
+    if [ "$SKIP_FASTAPI" = false ] && [ -f "$FASTAPI_PID_FILE" ]; then
+        echo "  Stop FastAPI:  kill \$(cat $FASTAPI_PID_FILE)"
+    fi
+    echo "  Stop both:     pkill -f 'linuxcnc.*\\.ini'; kill \$(cat $FASTAPI_PID_FILE 2>/dev/null)"
+    echo ""
+}
 
-echo ""
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
 
-if [ "$SUCCESS" = true ]; then
-    echo -e "${GREEN}✓${NC} LinuxCNC started successfully (PID: $LINUXCNC_PID)"
-    echo ""
-    echo -e "${GREEN}═══════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}  LinuxCNC System Ready${NC}"
-    echo -e "${GREEN}═══════════════════════════════════════════════${NC}"
-    echo ""
-    echo "Configuration: $CONFIG_FILE"
-    echo "Log file:      $LOG_FILE"
-    echo ""
-    echo "Monitor logs: tail -f $LOG_FILE"
-    echo "Stop system:  pkill -f 'linuxcnc.*\\.ini'"
-    echo ""
-else
-    echo -e "${YELLOW}⚠${NC}  Startup verification timeout"
-    echo "Process is running (PID: $LINUXCNC_PID) but couldn't verify startup"
-    echo "Check logs: tail -f $LOG_FILE"
-fi
+print_header
+check_mesa
+load_linuxcnc_env
+stop_existing_processes
+verify_config
+start_linuxcnc
+start_fastapi
+print_summary
 
 exit 0

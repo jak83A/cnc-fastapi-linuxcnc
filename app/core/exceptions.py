@@ -1,3 +1,4 @@
+# app/core/exceptions.py
 """
 Custom exception classes for CNC API.
 """

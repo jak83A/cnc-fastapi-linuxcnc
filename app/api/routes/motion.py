@@ -1,3 +1,4 @@
+# /app/api/routes/motion.py
 """
 API routes for CNC motion control.
 """

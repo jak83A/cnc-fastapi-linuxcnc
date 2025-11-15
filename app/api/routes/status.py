@@ -1,3 +1,4 @@
+# /app/api/routes/status.py
 """
 API routes for machine status queries.
 """

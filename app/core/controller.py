@@ -1,3 +1,4 @@
+# app/core/controller.py
 """
 LinuxCNC controller wrapper with modular, well-documented methods.
 """

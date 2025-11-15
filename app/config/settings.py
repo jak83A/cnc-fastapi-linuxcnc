@@ -1,3 +1,4 @@
+# app/config/settings.py
 """
 Application settings and configuration.
 """
