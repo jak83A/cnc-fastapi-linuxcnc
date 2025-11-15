@@ -28,7 +28,7 @@ CONFIG_FILE="$CONFIG_DIR/zero3-mesa7i92.ini"
 LINUXCNC_LOG="/tmp/linuxcnc_startup.log"
 
 # FastAPI Configuration
-FASTAPI_PROJECT_DIR="$PROJECT_DIR/linuxcnc-fastapi-controller"  # UPDATE THIS!
+FASTAPI_PROJECT_DIR="$PROJECT_DIR/cnc-fastapi-linuxcnc"         # FastAPI project directory
 VENV_PATH="$FASTAPI_PROJECT_DIR/venv"                           # Virtual environment path
 FASTAPI_APP="app.main:app"                                       # Format: module.file:app_instance
 FASTAPI_HOST="0.0.0.0"                                          # 0.0.0.0 = accessible from network
