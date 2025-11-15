@@ -150,13 +150,36 @@ start_linuxcnc() {
         echo "     Using display: DISPLAY=$DISPLAY"
     fi
     
-    # Change to config directory
-    cd "$CONFIG_DIR"
-    
+    # Pre-flight checks
+    echo "     Running pre-flight checks..."
+
+    # Check LinuxCNC command
+    if ! command -v linuxcnc &> /dev/null; then
+        echo -e "${RED}✗${NC} linuxcnc command not found"
+        echo "     Make sure LinuxCNC RIP environment is loaded"
+        exit 1
+    fi
+
+    # Verify config file exists
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo -e "${RED}✗${NC} Config file not found: $CONFIG_FILE"
+        echo "     Expected location: $CONFIG_FILE"
+        echo "     Available configs in $LINUXCNC_DIR/configs/:"
+        ls -la "$LINUXCNC_DIR/configs/" 2>/dev/null || echo "     Directory not found"
+        exit 1
+    fi
+
+    echo "     Config file: $CONFIG_FILE"
+
     # Start LinuxCNC
     echo "     Starting LinuxCNC process..."
-    nohup linuxcnc "$CONFIG_FILE" > "$LINUXCNC_LOG" 2>&1 &
+
+    # Start with explicit error capture
+    nohup linuxcnc "$CONFIG_FILE" >> "$LINUXCNC_LOG" 2>&1 &
     LINUXCNC_PID=$!
+
+    # Give it a moment to fail if it's going to fail immediately
+    sleep 0.5
     
     echo "     Waiting for LinuxCNC to initialize (PID: $LINUXCNC_PID)..."
     
@@ -170,8 +193,21 @@ start_linuxcnc() {
             echo ""
             echo -e "${RED}✗${NC} LinuxCNC process died"
             echo ""
-            echo "Error log:"
-            cat "$LINUXCNC_LOG" | tail -20 | sed 's/^/  /'
+            if [ -s "$LINUXCNC_LOG" ]; then
+                echo "Error log (last 30 lines):"
+                cat "$LINUXCNC_LOG" | tail -30 | sed 's/^/  /'
+            else
+                echo "Log file is empty. Process failed immediately."
+                echo "This usually means:"
+                echo "  - Config file path is wrong: $CONFIG_FILE"
+                echo "  - LinuxCNC environment not properly loaded"
+                echo "  - Display issue (DISPLAY=$DISPLAY)"
+                echo ""
+                echo "Debug steps:"
+                echo "  1. Verify config exists: ls -la $CONFIG_FILE"
+                echo "  2. Test LinuxCNC command: which linuxcnc"
+                echo "  3. Check Xvfb: ps aux | grep Xvfb"
+            fi
             exit 1
         fi
         
