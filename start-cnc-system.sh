@@ -140,16 +140,15 @@ start_linuxcnc() {
     if command -v Xvfb &> /dev/null; then
         if ! pgrep -x "Xvfb" > /dev/null; then
             echo "     Starting Xvfb virtual display..."
-            Xvfb :1 -screen 0 1024x768x24 -ac &> /dev/null &
+            # Use -ac to disable access control and -nolisten tcp for security
+            # -auth /dev/null disables xauth requirement
+            Xvfb :99 -screen 0 1024x768x24 -ac -nolisten tcp +extension GLX &> /dev/null &
             sleep 2
         fi
-        export DISPLAY=:1
+        export DISPLAY=:99
+        # Disable xauth requirement completely
+        export XAUTHORITY=/dev/null
         echo "     Using virtual display: DISPLAY=$DISPLAY"
-
-        # Allow local connections to X server (required for LinuxCNC subprocesses)
-        if command -v xhost &> /dev/null; then
-            xhost +local: > /dev/null 2>&1 || true
-        fi
     else
         export DISPLAY=:0
         echo "     Using display: DISPLAY=$DISPLAY"
