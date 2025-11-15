@@ -382,28 +382,57 @@ case $config_choice in
             echo "Configure network for Mesa 7i92 now? (y/n)"
             read -p "Response [y]: " network_response
             network_response=${network_response:-y}
-            
+
             if [[ "$network_response" =~ ^[Yy]$ ]]; then
                 echo ""
                 echo "Available network interfaces:"
-                ip -br link show | grep -v lo
+                ip -br addr show | grep -v lo
                 echo ""
-                read -p "Interface for Mesa 7i92 (e.g., enp0s31f6): " mesa_interface
-                read -p "IP for your PC [192.168.192.1]: " pc_ip
-                pc_ip=${pc_ip:-192.168.192.1}
-                
+                read -p "Interface connected to Mesa 7i92 (e.g., enp5s0): " mesa_interface
+
                 echo ""
-                echo "Configuring network..."
-                sudo ip addr add ${pc_ip}/24 dev $mesa_interface 2>/dev/null || echo "IP may already be configured"
-                sudo ip link set $mesa_interface up
-                
+                echo -e "${BOLD}Network Configuration:${NC}"
+                echo "Please provide the IP addresses for your Mesa setup."
                 echo ""
-                echo "Testing Mesa connection (192.168.192.210)..."
-                if ping -c 2 -W 2 192.168.192.210 &>/dev/null; then
-                    echo -e "${GREEN}✓ Mesa 7i92 is reachable!${NC}"
+                read -p "IP address for your PC on this interface (e.g., 10.10.10.10): " pc_ip
+                read -p "Subnet mask CIDR (e.g., 24 for /24) [24]: " subnet_mask
+                subnet_mask=${subnet_mask:-24}
+                read -p "IP address of your Mesa 7i92 card (e.g., 10.10.10.11): " mesa_ip
+
+                # Validate inputs
+                if [ -z "$mesa_interface" ] || [ -z "$pc_ip" ] || [ -z "$mesa_ip" ]; then
+                    echo -e "${RED}❌ Missing required information. Skipping network configuration.${NC}"
                 else
-                    echo -e "${YELLOW}⚠ Cannot reach Mesa 7i92${NC}"
-                    echo "Check cable, power, and IP address"
+                    echo ""
+                    echo "Configuring network..."
+                    echo "  Interface: $mesa_interface"
+                    echo "  PC IP: $pc_ip/$subnet_mask"
+                    echo "  Mesa IP: $mesa_ip"
+                    echo ""
+
+                    sudo ip addr add ${pc_ip}/${subnet_mask} dev $mesa_interface 2>/dev/null || echo "IP may already be configured"
+                    sudo ip link set $mesa_interface up
+
+                    echo ""
+                    echo "Testing Mesa connection to $mesa_ip..."
+                    if ping -c 2 -W 2 $mesa_ip &>/dev/null; then
+                        echo -e "${GREEN}✓ Mesa 7i92 at $mesa_ip is reachable!${NC}"
+
+                        # Update HAL file with correct Mesa IP
+                        hal_file="$LINUXCNC_CONFIG_BASE/zero3-mesa7i92/mesa7i92-zero3.hal"
+                        if [ -f "$hal_file" ]; then
+                            echo "Updating HAL file with Mesa IP..."
+                            sed -i "s/board_ip=.*/board_ip=$mesa_ip/" "$hal_file"
+                            echo -e "${GREEN}✓ HAL file updated with board_ip=$mesa_ip${NC}"
+                        fi
+                    else
+                        echo -e "${YELLOW}⚠ Cannot reach Mesa 7i92 at $mesa_ip${NC}"
+                        echo "Possible issues:"
+                        echo "  - Check cable connection"
+                        echo "  - Verify Mesa card is powered on"
+                        echo "  - Confirm Mesa IP address is correct"
+                        echo "  - Check if Mesa card is configured for this IP"
+                    fi
                 fi
             fi
         else
