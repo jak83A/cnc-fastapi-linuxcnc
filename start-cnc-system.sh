@@ -256,11 +256,9 @@ start_fastapi() {
     export INI_FILE_NAME="$CONFIG_FILE"
     export EMC2_HOME="$LINUXCNC_DIR"
 
-    # Use the same NMLFILE that LinuxCNC is using (from rip-environment)
-    # If NMLFILE is already set by rip-environment, keep it; otherwise use default
-    if [ -z "$NMLFILE" ]; then
-        export NMLFILE="$LINUXCNC_DIR/configs/common/linuxcnc.nml"
-    fi
+    # LinuxCNC RIP builds use the config directory for NML resolution
+    # We need to ensure the NMLFILE points to the same NML config LinuxCNC uses
+    export NMLFILE="$EMC2_HOME/configs/common/linuxcnc.nml"
     export LD_LIBRARY_PATH="$LINUXCNC_DIR/lib:$LD_LIBRARY_PATH"
 
     echo "       INI_FILE_NAME=$INI_FILE_NAME"
@@ -269,11 +267,14 @@ start_fastapi() {
     echo "       LD_LIBRARY_PATH includes: $LINUXCNC_DIR/lib"
 
     # Start FastAPI with uvicorn
+    # IMPORTANT: Run from LinuxCNC config directory so NML can resolve correctly
     echo "     Starting uvicorn server..."
-    nohup uvicorn "$FASTAPI_APP" \
+    cd "$CONFIG_DIR"
+    nohup "$VENV_PATH/bin/uvicorn" "$FASTAPI_APP" \
         --host "$FASTAPI_HOST" \
         --port "$FASTAPI_PORT" \
         --log-level info \
+        --app-dir "$FASTAPI_PROJECT_DIR" \
         > "$FASTAPI_LOG" 2>&1 &
     
     FASTAPI_PID=$!
