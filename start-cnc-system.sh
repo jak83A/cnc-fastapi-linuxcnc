@@ -140,11 +140,16 @@ start_linuxcnc() {
     if command -v Xvfb &> /dev/null; then
         if ! pgrep -x "Xvfb" > /dev/null; then
             echo "     Starting Xvfb virtual display..."
-            Xvfb :1 -screen 0 1024x768x24 &> /dev/null &
+            Xvfb :1 -screen 0 1024x768x24 -ac &> /dev/null &
             sleep 2
         fi
         export DISPLAY=:1
         echo "     Using virtual display: DISPLAY=$DISPLAY"
+
+        # Allow local connections to X server (required for LinuxCNC subprocesses)
+        if command -v xhost &> /dev/null; then
+            xhost +local: > /dev/null 2>&1 || true
+        fi
     else
         export DISPLAY=:0
         echo "     Using display: DISPLAY=$DISPLAY"
