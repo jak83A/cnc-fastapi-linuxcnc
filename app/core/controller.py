@@ -2,6 +2,7 @@
 """
 LinuxCNC controller wrapper with modular, well-documented methods.
 """
+import os
 import sys
 import time
 from typing import Any
@@ -16,29 +17,69 @@ from app.core.exceptions import (
 
 class CNCController:
     """Wrapper around LinuxCNC Python API for CNC machine control."""
-    
-    def __init__(self, linuxcnc_path: str = "/usr/lib/python3/dist-packages", poll_interval: float = 0.05) -> None:
+
+    def __init__(self, linuxcnc_path: str | None = None, poll_interval: float = 0.05) -> None:
         """
         Initialize CNC controller connection.
-        
-        :param linuxcnc_path: Path to LinuxCNC Python modules
-        :type linuxcnc_path: str
+
+        :param linuxcnc_path: Path to LinuxCNC Python modules (auto-detected if None)
+        :type linuxcnc_path: str | None
         :param poll_interval: Seconds to sleep between status polls
         :type poll_interval: float
         :raises LinuxCNCConnectionException: If cannot import or connect to LinuxCNC
         """
         self.poll_interval = poll_interval
-        
+
         try:
-            sys.path.append(linuxcnc_path)
+            # Auto-detect LinuxCNC Python module path if not provided
+            if linuxcnc_path is None:
+                linuxcnc_path = self._find_linuxcnc_path()
+
+            if linuxcnc_path and linuxcnc_path not in sys.path:
+                sys.path.insert(0, linuxcnc_path)
+
             import linuxcnc
             self.linuxcnc = linuxcnc
-            
+
             self.command = linuxcnc.command()
             self.status = linuxcnc.stat()
             self.error_channel = linuxcnc.error_channel()
         except Exception as e:
             raise LinuxCNCConnectionException(f"Failed to connect to LinuxCNC: {str(e)}")
+
+    def _find_linuxcnc_path(self) -> str | None:
+        """
+        Auto-detect LinuxCNC Python module path.
+
+        Searches in order:
+        1. PYTHONPATH environment variable (already in sys.path)
+        2. ~/linuxcnc/lib/python (RIP installation)
+        3. /usr/lib/python3/dist-packages (system installation)
+
+        :return: Path to LinuxCNC modules or None if should use system path
+        :rtype: str | None
+        """
+        # Check if linuxcnc module is already importable (e.g., via PYTHONPATH)
+        try:
+            import linuxcnc  # noqa: F401
+            return None  # Already available, no need to add path
+        except ImportError:
+            pass
+
+        # Try common RIP installation paths
+        home = os.path.expanduser("~")
+        possible_paths = [
+            os.path.join(home, "linuxcnc", "lib", "python"),
+            os.path.join(home, "linuxcnc-dev", "lib", "python"),
+            "/usr/lib/python3/dist-packages",
+        ]
+
+        for path in possible_paths:
+            if os.path.isdir(path) and os.path.exists(os.path.join(path, "linuxcnc.so")):
+                return path
+
+        # Default to system path
+        return "/usr/lib/python3/dist-packages"
     
     # ==================== Private Helper Methods ====================
     

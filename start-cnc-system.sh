@@ -256,32 +256,45 @@ start_fastapi() {
         echo ""
         return
     fi
-    
+
     echo -e "${YELLOW}[6/6]${NC} Starting FastAPI application..."
-    
+
     cd "$FASTAPI_PROJECT_DIR"
-    
+
     # Activate virtual environment
     echo "     Activating virtual environment..."
     source "$VENV_PATH/bin/activate"
-    
+
     # Clear log
     > "$FASTAPI_LOG"
-    
+
+    # Set LinuxCNC Python path for the FastAPI app
+    # This allows the app to find the LinuxCNC modules from RIP installation
+    LINUXCNC_PYTHON_PATH="$LINUXCNC_DIR/lib/python"
+    if [ -d "$LINUXCNC_PYTHON_PATH" ]; then
+        echo "     Setting LinuxCNC Python path: $LINUXCNC_PYTHON_PATH"
+        export PYTHONPATH="$LINUXCNC_PYTHON_PATH:$PYTHONPATH"
+    fi
+
+    # Export current environment variables for LinuxCNC
+    export LINUXCNC_EMC_INI_PATH="$CONFIG_FILE"
+
     # Start FastAPI with uvicorn
     echo "     Starting uvicorn server..."
-    nohup uvicorn "$FASTAPI_APP" \
+    nohup env PYTHONPATH="$PYTHONPATH" \
+        LINUXCNC_INI="$CONFIG_FILE" \
+        uvicorn "$FASTAPI_APP" \
         --host "$FASTAPI_HOST" \
         --port "$FASTAPI_PORT" \
         --log-level info \
         > "$FASTAPI_LOG" 2>&1 &
-    
+
     FASTAPI_PID=$!
     echo "$FASTAPI_PID" > "$FASTAPI_PID_FILE"
-    
+
     # Wait briefly and check if it started
     sleep 3
-    
+
     if kill -0 "$FASTAPI_PID" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} FastAPI started successfully (PID: $FASTAPI_PID)"
         echo ""
