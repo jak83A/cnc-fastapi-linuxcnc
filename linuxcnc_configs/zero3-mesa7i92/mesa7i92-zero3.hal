@@ -1,193 +1,70 @@
-# HAL Configuration for Zero-3 CNC Controller with Mesa 7i92
-# This file connects the Mesa 7i92 hardware to LinuxCNC motion controller
-
-# =====================================================
-# LOAD MODULES
-# =====================================================
-
-# Load HostMot2 driver
 loadrt hostmot2
-
-# Load Mesa 7i92 Ethernet interface
-# ADJUST THIS IP ADDRESS to match your Mesa 7i92
-loadrt hm2_eth board_ip=192.168.192.210 config="num_encoders=0 num_pwmgens=1 num_stepgens=5"
-
-# Load realtime threads
-loadrt threads name1=servo-thread period1=1000000
-
-# Load additional components
-loadrt not count=1
-
-# =====================================================
-# ADD FUNCTIONS TO THREADS
-# =====================================================
+loadrt hm2_eth board_ip=10.10.10.11
+loadrt trivkins coordinates=XYZ
+loadrt motmod servo_period_nsec=1000000 num_joints=3
 
 addf hm2_7i92.0.read servo-thread
+addf motion-command-handler servo-thread
+addf motion-controller servo-thread
 addf hm2_7i92.0.write servo-thread
-addf hm2_7i92.0.pet servo-thread
-addf not.0 servo-thread
 
-# =====================================================
-# STEPGEN CONFIGURATION
-# =====================================================
-
-# Stepgen 0 = X axis
-# Stepgen 1 = Y axis
-# Stepgen 2 = Z axis
-# Stepgen 3 = A axis (if using 4th axis)
-# Stepgen 4 = Charge pump
-
-# Set control type to position mode for X/Y/Z
 setp hm2_7i92.0.stepgen.00.control-type 0
 setp hm2_7i92.0.stepgen.01.control-type 0
 setp hm2_7i92.0.stepgen.02.control-type 0
-setp hm2_7i92.0.stepgen.03.control-type 0
 
-# Timing parameters for Zero-3 (needs ≥2µs step pulse)
-# Values in nanoseconds
-setp hm2_7i92.0.stepgen.00.dirsetup   4000
-setp hm2_7i92.0.stepgen.00.dirhold    4000
-setp hm2_7i92.0.stepgen.00.steplen    3000
-setp hm2_7i92.0.stepgen.00.stepspace  3000
+setp hm2_7i92.0.stepgen.00.dirsetup 4000
+setp hm2_7i92.0.stepgen.00.dirhold 4000
+setp hm2_7i92.0.stepgen.00.steplen 3000
+setp hm2_7i92.0.stepgen.00.stepspace 3000
+setp hm2_7i92.0.stepgen.01.dirsetup 4000
+setp hm2_7i92.0.stepgen.01.dirhold 4000
+setp hm2_7i92.0.stepgen.01.steplen 3000
+setp hm2_7i92.0.stepgen.01.stepspace 3000
+setp hm2_7i92.0.stepgen.02.dirsetup 4000
+setp hm2_7i92.0.stepgen.02.dirhold 4000
+setp hm2_7i92.0.stepgen.02.steplen 3000
+setp hm2_7i92.0.stepgen.02.stepspace 3000
 
-setp hm2_7i92.0.stepgen.01.dirsetup   4000
-setp hm2_7i92.0.stepgen.01.dirhold    4000
-setp hm2_7i92.0.stepgen.01.steplen    3000
-setp hm2_7i92.0.stepgen.01.stepspace  3000
+setp hm2_7i92.0.stepgen.00.position-scale 1000
+setp hm2_7i92.0.stepgen.01.position-scale 1000
+setp hm2_7i92.0.stepgen.02.position-scale 1000
+setp hm2_7i92.0.stepgen.00.maxvel 110.0
+setp hm2_7i92.0.stepgen.00.maxaccel 1100.0
+setp hm2_7i92.0.stepgen.01.maxvel 110.0
+setp hm2_7i92.0.stepgen.01.maxaccel 1100.0
+setp hm2_7i92.0.stepgen.02.maxvel 110.0
+setp hm2_7i92.0.stepgen.02.maxaccel 1100.0
 
-setp hm2_7i92.0.stepgen.02.dirsetup   4000
-setp hm2_7i92.0.stepgen.02.dirhold    4000
-setp hm2_7i92.0.stepgen.02.steplen    3000
-setp hm2_7i92.0.stepgen.02.stepspace  3000
+net xpos joint.0.motor-pos-cmd => hm2_7i92.0.stepgen.00.position-cmd
+net xfb hm2_7i92.0.stepgen.00.position-fb => joint.0.motor-pos-fb
+net xenable joint.0.amp-enable-out => hm2_7i92.0.stepgen.00.enable
 
-setp hm2_7i92.0.stepgen.03.dirsetup   4000
-setp hm2_7i92.0.stepgen.03.dirhold    4000
-setp hm2_7i92.0.stepgen.03.steplen    3000
-setp hm2_7i92.0.stepgen.03.stepspace  3000
+net ypos joint.1.motor-pos-cmd => hm2_7i92.0.stepgen.01.position-cmd
+net yfb hm2_7i92.0.stepgen.01.position-fb => joint.1.motor-pos-fb
+net yenable joint.1.amp-enable-out => hm2_7i92.0.stepgen.01.enable
 
-# Position scale (steps per mm)
-# ADJUST THESE VALUES FOR YOUR MACHINE
-# Formula: steps_per_rev * microsteps / mm_per_rev
-# Example: 200 steps/rev * 10 microsteps / 2mm = 1000 steps/mm
-setp hm2_7i92.0.stepgen.00.position-scale [JOINT_0]SCALE
-setp hm2_7i92.0.stepgen.01.position-scale [JOINT_1]SCALE
-setp hm2_7i92.0.stepgen.02.position-scale [JOINT_2]SCALE
-setp hm2_7i92.0.stepgen.03.position-scale 1000.0
+net zpos joint.2.motor-pos-cmd => hm2_7i92.0.stepgen.02.position-cmd
+net zfb hm2_7i92.0.stepgen.02.position-fb => joint.2.motor-pos-fb
+net zenable joint.2.amp-enable-out => hm2_7i92.0.stepgen.02.enable
 
-# Velocity and acceleration limits
-setp hm2_7i92.0.stepgen.00.maxvel [JOINT_0]STEPGEN_MAXVEL
-setp hm2_7i92.0.stepgen.00.maxaccel [JOINT_0]STEPGEN_MAXACCEL
-setp hm2_7i92.0.stepgen.01.maxvel [JOINT_1]STEPGEN_MAXVEL
-setp hm2_7i92.0.stepgen.01.maxaccel [JOINT_1]STEPGEN_MAXACCEL
-setp hm2_7i92.0.stepgen.02.maxvel [JOINT_2]STEPGEN_MAXVEL
-setp hm2_7i92.0.stepgen.02.maxaccel [JOINT_2]STEPGEN_MAXACCEL
+net estop iocontrol.0.user-enable-out => iocontrol.0.emc-enable-in
 
-# =====================================================
-# CONNECT STEPGENS TO MOTION CONTROLLER
-# =====================================================
-
-# X Axis (Joint 0)
-net joint.0.pos-cmd <= joint.0.motor-pos-cmd
-net joint.0.pos-cmd => hm2_7i92.0.stepgen.00.position-cmd
-net joint.0.pos-fb <= hm2_7i92.0.stepgen.00.position-fb
-net joint.0.pos-fb => joint.0.motor-pos-fb
-net joint.0.enable <= joint.0.amp-enable-out
-net joint.0.enable => hm2_7i92.0.stepgen.00.enable
-
-# Y Axis (Joint 1)
-net joint.1.pos-cmd <= joint.1.motor-pos-cmd
-net joint.1.pos-cmd => hm2_7i92.0.stepgen.01.position-cmd
-net joint.1.pos-fb <= hm2_7i92.0.stepgen.01.position-fb
-net joint.1.pos-fb => joint.1.motor-pos-fb
-net joint.1.enable <= joint.1.amp-enable-out
-net joint.1.enable => hm2_7i92.0.stepgen.01.enable
-
-# Z Axis (Joint 2)
-net joint.2.pos-cmd <= joint.2.motor-pos-cmd
-net joint.2.pos-cmd => hm2_7i92.0.stepgen.02.position-cmd
-net joint.2.pos-fb <= hm2_7i92.0.stepgen.02.position-fb
-net joint.2.pos-fb => joint.2.motor-pos-fb
-net joint.2.enable <= joint.2.amp-enable-out
-net joint.2.enable => hm2_7i92.0.stepgen.02.enable
-
-# =====================================================
-# SPINDLE CONTROL (PWM)
-# =====================================================
-
-# PWM frequency for all channels
+setp hm2_7i92.0.gpio.000.is_output true
+setp hm2_7i92.0.gpio.001.is_output true
 setp hm2_7i92.0.pwmgen.pwm_frequency 1000
-
-# Scale to max RPM (adjust to your spindle)
 setp hm2_7i92.0.pwmgen.00.scale 18000
 
-# Connect spindle control
-net spindle-on <= spindle.0.on
-net spindle-on => hm2_7i92.0.pwmgen.00.enable
+net spindleon spindle.0.on => hm2_7i92.0.pwmgen.00.enable hm2_7i92.0.gpio.000.out
+net spindlespeed spindle.0.speed-out => hm2_7i92.0.pwmgen.00.value
+net coolant iocontrol.0.coolant-mist => hm2_7i92.0.gpio.001.out
 
-net spindle-speed <= spindle.0.speed-out
-net spindle-speed => hm2_7i92.0.pwmgen.00.value
+net homex hm2_7i92.0.gpio.016.in => joint.0.home-sw-in
+net homey hm2_7i92.0.gpio.015.in => joint.1.home-sw-in
+net homez hm2_7i92.0.gpio.013.in => joint.2.home-sw-in
 
-net spindle-at-speed => spindle.0.at-speed
-
-# =====================================================
-# GPIO CONFIGURATION
-# =====================================================
-
-# Relay outputs
-setp hm2_7i92.0.gpio.000.is_output true   # P2-1:  Spindle power relay
-setp hm2_7i92.0.gpio.001.is_output true   # P2-14: Coolant/vacuum relay
-
-# Connect relays
-net spindle-power <= spindle.0.on
-net spindle-power => hm2_7i92.0.gpio.000.out
-
-net coolant-mist <= iocontrol.0.coolant-mist
-net coolant-mist => hm2_7i92.0.gpio.001.out
-
-# =====================================================
-# E-STOP AND HOME SWITCHES
-# =====================================================
-
-# E-Stop input (P2-11, active-low, inverted)
-net estop-raw <= hm2_7i92.0.gpio.014.in
-net estop-raw => not.0.in
-net estop-in <= not.0.out
-net estop-in => iocontrol.0.emc-enable-in
-
-# Home switches (active-high)
-# P2-10 = Z home
-# P2-12 = Y home  
-# P2-13 = X home
-net home-x <= hm2_7i92.0.gpio.016.in
-net home-x => joint.0.home-sw-in
-
-net home-y <= hm2_7i92.0.gpio.015.in
-net home-y => joint.1.home-sw-in
-
-net home-z <= hm2_7i92.0.gpio.013.in
-net home-z => joint.2.home-sw-in
-
-# =====================================================
-# CHARGE PUMP / WATCHDOG
-# =====================================================
-
-# Stepgen 4 used as charge pump (P2-16)
-# Generates continuous 12.5 kHz signal for external watchdog
-setp hm2_7i92.0.stepgen.04.control-type 1         # velocity mode
+setp hm2_7i92.0.stepgen.04.control-type 1
 setp hm2_7i92.0.stepgen.04.position-scale 1
 setp hm2_7i92.0.stepgen.04.maxvel 20000
-setp hm2_7i92.0.stepgen.04.maxaccel 1000000000
+setp hm2_7i92.0.stepgen.04.maxaccel 1e9
 setp hm2_7i92.0.stepgen.04.enable 1
-setp hm2_7i92.0.stepgen.04.velocity-cmd 12500     # 12.5 kHz
-
-# =====================================================
-# STANDARD I/O SIGNALS
-# =====================================================
-
-# Machine is enabled when not in E-stop
-net machine-is-enabled <= halui.machine.is-on
-
-# Program control
-net program-start-ok <= halui.program.is-idle
-net program-running <= halui.program.is-running
-net program-paused <= halui.program.is-paused
+setp hm2_7i92.0.stepgen.04.velocity-cmd 12500
