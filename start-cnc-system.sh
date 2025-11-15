@@ -255,7 +255,12 @@ start_fastapi() {
     echo "     Setting LinuxCNC environment:"
     export INI_FILE_NAME="$CONFIG_FILE"
     export EMC2_HOME="$LINUXCNC_DIR"
-    export NMLFILE="$LINUXCNC_DIR/configs/common/linuxcnc.nml"
+
+    # Use the same NMLFILE that LinuxCNC is using (from rip-environment)
+    # If NMLFILE is already set by rip-environment, keep it; otherwise use default
+    if [ -z "$NMLFILE" ]; then
+        export NMLFILE="$LINUXCNC_DIR/configs/common/linuxcnc.nml"
+    fi
     export LD_LIBRARY_PATH="$LINUXCNC_DIR/lib:$LD_LIBRARY_PATH"
 
     echo "       INI_FILE_NAME=$INI_FILE_NAME"

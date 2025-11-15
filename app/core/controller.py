@@ -41,13 +41,19 @@ class CNCController:
 
             self.linuxcnc = linuxcnc
 
-            # Verify required environment variables for NML communication
+            # Log environment info for debugging (optional check)
             import os
             nml_file = os.environ.get("NMLFILE", "")
+            ini_file = os.environ.get("INI_FILE_NAME", "")
+            emc2_home = os.environ.get("EMC2_HOME", "")
+
+            # These are informational - LinuxCNC may work without them explicitly set
+            # if the module can find the running instance through other means
             if not nml_file:
-                raise LinuxCNCConnectionException(
+                import warnings
+                warnings.warn(
                     "NMLFILE environment variable not set. "
-                    "Ensure LinuxCNC environment is properly configured."
+                    "LinuxCNC connection may fail if instance not found."
                 )
 
             self.command = linuxcnc.command()
