@@ -16,11 +16,11 @@ from app.core.exceptions import (
 
 class CNCController:
     """Wrapper around LinuxCNC Python API for CNC machine control."""
-    
+
     def __init__(self, linuxcnc_path: str = "/usr/lib/python3/dist-packages", poll_interval: float = 0.05) -> None:
         """
         Initialize CNC controller connection.
-        
+
         :param linuxcnc_path: Path to LinuxCNC Python modules
         :type linuxcnc_path: str
         :param poll_interval: Seconds to sleep between status polls
@@ -28,15 +28,33 @@ class CNCController:
         :raises LinuxCNCConnectionException: If cannot import or connect to LinuxCNC
         """
         self.poll_interval = poll_interval
-        
+
         try:
-            sys.path.append(linuxcnc_path)
-            import linuxcnc
+            # Try importing linuxcnc from current sys.path first (respects PYTHONPATH)
+            # This allows RIP environments to work when PYTHONPATH is set
+            try:
+                import linuxcnc
+            except ImportError:
+                # Fallback to configured path if not found in PYTHONPATH
+                sys.path.append(linuxcnc_path)
+                import linuxcnc
+
             self.linuxcnc = linuxcnc
-            
+
+            # Verify required environment variables for NML communication
+            import os
+            nml_file = os.environ.get("NMLFILE", "")
+            if not nml_file:
+                raise LinuxCNCConnectionException(
+                    "NMLFILE environment variable not set. "
+                    "Ensure LinuxCNC environment is properly configured."
+                )
+
             self.command = linuxcnc.command()
             self.status = linuxcnc.stat()
             self.error_channel = linuxcnc.error_channel()
+        except LinuxCNCConnectionException:
+            raise
         except Exception as e:
             raise LinuxCNCConnectionException(f"Failed to connect to LinuxCNC: {str(e)}")
     
@@ -45,13 +63,23 @@ class CNCController:
     def _poll_status(self) -> None:
         """
         Update status from LinuxCNC.
-        
+
         :raises LinuxCNCConnectionException: If status poll fails
         """
-        try:
-            self.status.poll()
-        except Exception as e:
-            raise LinuxCNCConnectionException(f"Status poll failed: {str(e)}")
+        max_retries = 3
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                self.status.poll()
+                return
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    time.sleep(self.poll_interval * (attempt + 1))
+                    continue
+
+        raise LinuxCNCConnectionException(f"Status poll failed after {max_retries} attempts: {str(last_error)}")
     
     def _drain_error_messages(self) -> list[tuple[int, str]]:
         """

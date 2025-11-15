@@ -220,18 +220,34 @@ start_fastapi() {
         echo ""
         return
     fi
-    
+
     echo -e "${YELLOW}[6/6]${NC} Starting FastAPI application..."
-    
+
     cd "$FASTAPI_PROJECT_DIR"
-    
+
     # Activate virtual environment
     echo "     Activating virtual environment..."
     source "$VENV_PATH/bin/activate"
-    
+
     # Clear log
     > "$FASTAPI_LOG"
-    
+
+    # Set LinuxCNC environment variables for FastAPI
+    # These are critical for the linuxcnc Python module to connect via NML
+    echo "     Setting LinuxCNC Python path: $LINUXCNC_DIR/lib/python"
+    export PYTHONPATH="$LINUXCNC_DIR/lib/python:$PYTHONPATH"
+
+    echo "     Setting LinuxCNC environment:"
+    export INI_FILE_NAME="$CONFIG_FILE"
+    export EMC2_HOME="$LINUXCNC_DIR"
+    export NMLFILE="$LINUXCNC_DIR/configs/common/linuxcnc.nml"
+    export LD_LIBRARY_PATH="$LINUXCNC_DIR/lib:$LD_LIBRARY_PATH"
+
+    echo "       INI_FILE_NAME=$INI_FILE_NAME"
+    echo "       EMC2_HOME=$EMC2_HOME"
+    echo "       NMLFILE=$NMLFILE"
+    echo "       LD_LIBRARY_PATH includes: $LINUXCNC_DIR/lib"
+
     # Start FastAPI with uvicorn
     echo "     Starting uvicorn server..."
     nohup uvicorn "$FASTAPI_APP" \
