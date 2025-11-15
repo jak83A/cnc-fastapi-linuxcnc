@@ -152,7 +152,18 @@ start_linuxcnc() {
     
     # Change to config directory
     cd "$CONFIG_DIR"
-    
+
+    # Verify linuxcnc is available
+    echo "     Running pre-flight checks..."
+    if ! command -v linuxcnc &> /dev/null; then
+        echo -e "${RED}✗${NC} linuxcnc command not found in PATH"
+        echo "     PATH: $PATH"
+        exit 1
+    fi
+
+    echo "     Config file: $CONFIG_FILE"
+    echo "     Working directory: $(pwd)"
+
     # Start LinuxCNC
     echo "     Starting LinuxCNC process..."
     nohup linuxcnc "$CONFIG_FILE" > "$LINUXCNC_LOG" 2>&1 &
