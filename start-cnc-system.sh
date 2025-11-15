@@ -169,8 +169,9 @@ start_linuxcnc() {
     echo "     Working directory: $(pwd)"
 
     # Start LinuxCNC
+    # Use -k flag to suppress display errors and continue without GUI
     echo "     Starting LinuxCNC process..."
-    nohup linuxcnc "$CONFIG_FILE" > "$LINUXCNC_LOG" 2>&1 &
+    nohup linuxcnc -k "$CONFIG_FILE" > "$LINUXCNC_LOG" 2>&1 &
     LINUXCNC_PID=$!
     
     echo "     Waiting for LinuxCNC to initialize (PID: $LINUXCNC_PID)..."
