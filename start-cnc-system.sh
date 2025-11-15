@@ -276,13 +276,54 @@ start_fastapi() {
         export PYTHONPATH="$LINUXCNC_PYTHON_PATH:$PYTHONPATH"
     fi
 
-    # Export current environment variables for LinuxCNC
-    export LINUXCNC_EMC_INI_PATH="$CONFIG_FILE"
+    # Export LinuxCNC RIP environment variables
+    # These are needed for the Python module to connect to the running LinuxCNC instance
+    export INI_FILE_NAME="$CONFIG_FILE"
+    export LINUXCNC_INI="$CONFIG_FILE"
+    export EMC2_HOME="$LINUXCNC_DIR"
+    export LINUXCNC_HOME="$LINUXCNC_DIR"
+    export LINUXCNC_BIN_DIR="$LINUXCNC_DIR/bin"
+    export LINUXCNC_NCFILES_DIR="$LINUXCNC_DIR/nc_files"
+
+    # Find and set NML file path (critical for Python API connection)
+    # Check common locations for RIP installations
+    if [ -f "$LINUXCNC_DIR/configs/common/linuxcnc.nml" ]; then
+        NMLFILE="$LINUXCNC_DIR/configs/common/linuxcnc.nml"
+    elif [ -f "$LINUXCNC_DIR/etc/linuxcnc.nml" ]; then
+        NMLFILE="$LINUXCNC_DIR/etc/linuxcnc.nml"
+    elif [ -f "/usr/share/linuxcnc/linuxcnc.nml" ]; then
+        NMLFILE="/usr/share/linuxcnc/linuxcnc.nml"
+    else
+        NMLFILE=""
+    fi
+    export NMLFILE
+
+    # Add LinuxCNC library path for shared objects
+    LINUXCNC_LIB_PATH="$LINUXCNC_DIR/lib"
+    if [ -d "$LINUXCNC_LIB_PATH" ]; then
+        export LD_LIBRARY_PATH="$LINUXCNC_LIB_PATH:$LD_LIBRARY_PATH"
+    fi
+
+    echo "     Setting LinuxCNC environment:"
+    echo "       INI_FILE_NAME=$INI_FILE_NAME"
+    echo "       EMC2_HOME=$EMC2_HOME"
+    if [ -n "$NMLFILE" ]; then
+        echo "       NMLFILE=$NMLFILE"
+    else
+        echo "       NMLFILE=not found (using default)"
+    fi
+    echo "       LD_LIBRARY_PATH includes: $LINUXCNC_LIB_PATH"
 
     # Start FastAPI with uvicorn
     echo "     Starting uvicorn server..."
     nohup env PYTHONPATH="$PYTHONPATH" \
-        LINUXCNC_INI="$CONFIG_FILE" \
+        LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
+        INI_FILE_NAME="$INI_FILE_NAME" \
+        LINUXCNC_INI="$LINUXCNC_INI" \
+        EMC2_HOME="$EMC2_HOME" \
+        LINUXCNC_HOME="$LINUXCNC_HOME" \
+        LINUXCNC_BIN_DIR="$LINUXCNC_BIN_DIR" \
+        NMLFILE="$NMLFILE" \
         uvicorn "$FASTAPI_APP" \
         --host "$FASTAPI_HOST" \
         --port "$FASTAPI_PORT" \
