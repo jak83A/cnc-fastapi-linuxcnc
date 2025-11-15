@@ -220,18 +220,27 @@ start_fastapi() {
         echo ""
         return
     fi
-    
+
     echo -e "${YELLOW}[6/6]${NC} Starting FastAPI application..."
-    
+
     cd "$FASTAPI_PROJECT_DIR"
-    
+
     # Activate virtual environment
     echo "     Activating virtual environment..."
     source "$VENV_PATH/bin/activate"
-    
+
     # Clear log
     > "$FASTAPI_LOG"
-    
+
+    # Export LinuxCNC environment variables for FastAPI to inherit
+    # These are needed for the linuxcnc Python module to work
+    export EMC2_HOME="$LINUXCNC_DIR"
+    export LINUXCNC_HOME="$LINUXCNC_DIR"
+    export EMC2_EMCSH="$LINUXCNC_DIR/bin/emcsh"
+    export EMC2_IOSH="$LINUXCNC_DIR/bin/iosh"
+    export PATH="$LINUXCNC_DIR/bin:$PATH"
+    export PYTHONPATH="$LINUXCNC_DIR/lib/python:$PYTHONPATH"
+
     # Start FastAPI with uvicorn
     echo "     Starting uvicorn server..."
     nohup uvicorn "$FASTAPI_APP" \
@@ -239,7 +248,7 @@ start_fastapi() {
         --port "$FASTAPI_PORT" \
         --log-level info \
         > "$FASTAPI_LOG" 2>&1 &
-    
+
     FASTAPI_PID=$!
     echo "$FASTAPI_PID" > "$FASTAPI_PID_FILE"
     
