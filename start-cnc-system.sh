@@ -158,11 +158,40 @@ start_linuxcnc() {
     echo "     Working directory: $(pwd)"
 
     # Start LinuxCNC
-    # Use dummy display which prompts for Enter - we pipe echo to auto-confirm
+    # Use dummy display which prompts for Enter - we need to keep stdin open
+    # NOTE: We need to source rip-environment again in the subshell since bash -c doesn't inherit it
     echo "     Starting LinuxCNC process..."
-    # Pipe single newline to auto-confirm dummy display prompt
-    nohup bash -c "echo | linuxcnc '$CONFIG_FILE'" > "$LINUXCNC_LOG" 2>&1 &
+    # Create a wrapper script that sources environment and runs LinuxCNC
+    WRAPPER_SCRIPT="/tmp/linuxcnc_wrapper_$$.sh"
+    cat > "$WRAPPER_SCRIPT" << 'WRAPPER_EOF'
+#!/bin/bash
+cd "$1"
+source "$2/scripts/rip-environment" >/dev/null 2>&1
+unset DISPLAY
+# Use a FIFO to provide stdin that stays open
+FIFO_PATH="/tmp/linuxcnc_stdin_$$"
+mkfifo "$FIFO_PATH"
+# Send initial Enter and keep FIFO open in background
+# Use tail -f /dev/null after echo to keep the pipe open indefinitely
+(echo; tail -f /dev/null) > "$FIFO_PATH" &
+FEEDER_PID=$!
+# Start LinuxCNC reading from FIFO
+linuxcnc "$3" < "$FIFO_PATH"
+EXIT_CODE=$?
+# Cleanup
+kill $FEEDER_PID 2>/dev/null
+rm -f "$FIFO_PATH"
+exit $EXIT_CODE
+WRAPPER_EOF
+    chmod +x "$WRAPPER_SCRIPT"
+
+    # Start LinuxCNC with the wrapper
+    nohup "$WRAPPER_SCRIPT" "$CONFIG_DIR" "$LINUXCNC_DIR" "$CONFIG_FILE" > "$LINUXCNC_LOG" 2>&1 &
     LINUXCNC_PID=$!
+
+    # Clean up wrapper script (LinuxCNC is already running)
+    sleep 1
+    rm -f "$WRAPPER_SCRIPT"
     
     echo "     Waiting for LinuxCNC to initialize (PID: $LINUXCNC_PID)..."
     
