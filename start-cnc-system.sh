@@ -164,7 +164,9 @@ start_linuxcnc() {
 
     # Create a FIFO to provide stdin that stays open for dummy display
     FIFO_PATH="/tmp/linuxcnc_stdin_$$"
-    mkfifo "$FIFO_PATH" 2>/dev/null || rm -f "$FIFO_PATH" && mkfifo "$FIFO_PATH"
+    # Remove if exists, then create fresh
+    rm -f "$FIFO_PATH"
+    mkfifo "$FIFO_PATH"
 
     # Start feeder process that sends Enter and keeps pipe open
     (echo; while true; do sleep 3600; done) > "$FIFO_PATH" &
