@@ -144,10 +144,6 @@ class CNCController:
 
         :raises MachineNotHomedException: If any joint is not homed
         """
-        # TODO: Re-enable homing check once LinuxCNC homing config is fixed
-        # For now, bypass for testing - LinuxCNC homing is a configuration issue
-        return  # TEMPORARY: Skip homing check for testing
-
         self._poll_status()
         homed = getattr(self.status, "homed", None)
 
@@ -232,7 +228,11 @@ class CNCController:
         :raises EStopActiveException: If E-stop is active
         """
         self._ensure_machine_on()
-        self._switch_to_mdi_mode()
+
+        # Switch to MANUAL mode for homing (not MDI mode!)
+        self.command.mode(self.linuxcnc.MODE_MANUAL)
+        self.command.wait_complete()
+
         self._poll_status()
 
         # Get actual number of configured joints from axis_mask
