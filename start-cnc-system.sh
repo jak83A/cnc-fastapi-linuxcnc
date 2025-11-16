@@ -158,9 +158,10 @@ start_linuxcnc() {
     echo "     Working directory: $(pwd)"
 
     # Start LinuxCNC
-    # Use -k flag to suppress display errors and continue without GUI
+    # Use dummy display which prompts for Enter - we pipe yes to auto-confirm
     echo "     Starting LinuxCNC process..."
-    nohup linuxcnc -k "$CONFIG_FILE" > "$LINUXCNC_LOG" 2>&1 &
+    # Pipe "yes" to automatically press Enter for dummy display prompt
+    nohup bash -c "yes '' | linuxcnc '$CONFIG_FILE'" > "$LINUXCNC_LOG" 2>&1 &
     LINUXCNC_PID=$!
     
     echo "     Waiting for LinuxCNC to initialize (PID: $LINUXCNC_PID)..."
