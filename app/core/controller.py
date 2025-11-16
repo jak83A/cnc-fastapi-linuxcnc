@@ -117,25 +117,26 @@ class CNCController:
     def _ensure_machine_on(self) -> None:
         """
         Reset E-stop and turn machine on if needed.
-        
+
         :raises EStopActiveException: If E-stop cannot be cleared
         """
         self._poll_status()
-        
+
         if self.status.task_state == self.linuxcnc.STATE_ESTOP:
             self.command.state(self.linuxcnc.STATE_ESTOP_RESET)
-            self.command.wait_complete()
-            
+            self.command.wait_complete(timeout=5)
+            self._poll_status()
+
         if self.status.task_state != self.linuxcnc.STATE_ON:
             self.command.state(self.linuxcnc.STATE_ON)
-            self.command.wait_complete()
-    
+            self.command.wait_complete(timeout=5)
+
     def _switch_to_mdi_mode(self) -> None:
         """
         Switch controller to MDI (Manual Data Input) mode.
         """
         self.command.mode(self.linuxcnc.MODE_MDI)
-        self.command.wait_complete()
+        self.command.wait_complete(timeout=5)
     
     def _verify_machine_homed(self) -> None:
         """
@@ -426,11 +427,11 @@ class CNCController:
         if self.status.task_state == self.linuxcnc.STATE_ESTOP:
             raise EStopActiveException("Cannot turn machine on while E-stop is active")
         self.command.state(self.linuxcnc.STATE_ON)
-        self.command.wait_complete()
+        self.command.wait_complete(timeout=5)
 
     def machine_off(self) -> None:
         """
         Turn machine off (disable drives).
         """
         self.command.state(self.linuxcnc.STATE_OFF)
-        self.command.wait_complete()
+        self.command.wait_complete(timeout=5)
