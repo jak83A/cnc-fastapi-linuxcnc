@@ -31,6 +31,19 @@ else
     echo -e "${YELLOW}⚠${NC}  LinuxCNC not running"
 fi
 
+# Clean up FIFO feeder process
+if [ -f "/tmp/linuxcnc_feeder.pid" ]; then
+    FEEDER_PID=$(cat "/tmp/linuxcnc_feeder.pid" 2>/dev/null)
+    if [ -n "$FEEDER_PID" ] && kill -0 "$FEEDER_PID" 2>/dev/null; then
+        kill "$FEEDER_PID" 2>/dev/null
+    fi
+    rm -f "/tmp/linuxcnc_feeder.pid"
+fi
+if [ -f "/tmp/linuxcnc_fifo.path" ]; then
+    FIFO_PATH=$(cat "/tmp/linuxcnc_fifo.path" 2>/dev/null)
+    rm -f "$FIFO_PATH" "/tmp/linuxcnc_fifo.path"
+fi
+
 # Stop FastAPI
 echo -e "${YELLOW}[2/3]${NC} Stopping FastAPI..."
 if [ -f "$FASTAPI_PID_FILE" ]; then

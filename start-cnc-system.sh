@@ -159,39 +159,24 @@ start_linuxcnc() {
 
     # Start LinuxCNC
     # Use dummy display which prompts for Enter - we need to keep stdin open
-    # NOTE: We need to source rip-environment again in the subshell since bash -c doesn't inherit it
+    # Environment is already set up from load_linuxcnc_env(), so we can use linuxcnc directly
     echo "     Starting LinuxCNC process..."
-    # Create a wrapper script that sources environment and runs LinuxCNC
-    WRAPPER_SCRIPT="/tmp/linuxcnc_wrapper_$$.sh"
-    cat > "$WRAPPER_SCRIPT" << 'WRAPPER_EOF'
-#!/bin/bash
-cd "$1"
-source "$2/scripts/rip-environment" >/dev/null 2>&1
-unset DISPLAY
-# Use a FIFO to provide stdin that stays open
-FIFO_PATH="/tmp/linuxcnc_stdin_$$"
-mkfifo "$FIFO_PATH"
-# Send initial Enter and keep FIFO open in background
-# Use tail -f /dev/null after echo to keep the pipe open indefinitely
-(echo; tail -f /dev/null) > "$FIFO_PATH" &
-FEEDER_PID=$!
-# Start LinuxCNC reading from FIFO
-linuxcnc "$3" < "$FIFO_PATH"
-EXIT_CODE=$?
-# Cleanup
-kill $FEEDER_PID 2>/dev/null
-rm -f "$FIFO_PATH"
-exit $EXIT_CODE
-WRAPPER_EOF
-    chmod +x "$WRAPPER_SCRIPT"
 
-    # Start LinuxCNC with the wrapper
-    nohup "$WRAPPER_SCRIPT" "$CONFIG_DIR" "$LINUXCNC_DIR" "$CONFIG_FILE" > "$LINUXCNC_LOG" 2>&1 &
+    # Create a FIFO to provide stdin that stays open for dummy display
+    FIFO_PATH="/tmp/linuxcnc_stdin_$$"
+    mkfifo "$FIFO_PATH" 2>/dev/null || rm -f "$FIFO_PATH" && mkfifo "$FIFO_PATH"
+
+    # Start feeder process that sends Enter and keeps pipe open
+    (echo; while true; do sleep 3600; done) > "$FIFO_PATH" &
+    FEEDER_PID=$!
+
+    # Start LinuxCNC reading from FIFO
+    nohup linuxcnc "$CONFIG_FILE" < "$FIFO_PATH" > "$LINUXCNC_LOG" 2>&1 &
     LINUXCNC_PID=$!
 
-    # Clean up wrapper script (LinuxCNC is already running)
-    sleep 1
-    rm -f "$WRAPPER_SCRIPT"
+    # Save feeder PID for cleanup
+    echo "$FEEDER_PID" > "/tmp/linuxcnc_feeder.pid"
+    echo "$FIFO_PATH" > "/tmp/linuxcnc_fifo.path"
     
     echo "     Waiting for LinuxCNC to initialize (PID: $LINUXCNC_PID)..."
     
