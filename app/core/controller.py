@@ -219,14 +219,16 @@ class CNCController:
         self._switch_to_mdi_mode()
         self._poll_status()
 
-        # Get actual number of configured joints
-        joints_attr = getattr(self.status, "joints", 0)
-        if isinstance(joints_attr, int):
-            num_joints = joints_attr
-        elif isinstance(joints_attr, (list, tuple)):
-            num_joints = len(joints_attr)
+        # Get actual number of configured joints from axis_mask
+        # axis_mask is a bitmask where each bit represents an axis (X=1, Y=2, Z=4, etc.)
+        axis_mask = getattr(self.status, "axis_mask", 0)
+        if axis_mask > 0:
+            # Count the number of set bits
+            num_joints = bin(axis_mask).count('1')
         else:
-            num_joints = 0
+            # Fallback: use a reasonable default for typical 3-axis machine
+            # Don't use len(status.joints) as it's always 16 (fixed buffer size)
+            num_joints = 3
 
         for joint_index in range(num_joints):
             self.command.home(joint_index)
