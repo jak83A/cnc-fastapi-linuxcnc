@@ -1,0 +1,42 @@
+#!/usr/bin/expect -f
+# Start LinuxCNC in headless mode with dummy display
+# This script keeps running to maintain the pseudo-terminal connection
+
+set timeout 60
+set config_file [lindex $argv 0]
+
+if {$config_file eq ""} {
+    puts "Usage: start_linuxcnc_headless.exp <config_file.ini>"
+    exit 1
+}
+
+# Spawn LinuxCNC with the config file
+spawn linuxcnc $config_file
+
+# Wait for the dummy display prompt
+expect {
+    "press <ENTER>" {
+        # Send Enter to continue
+        send "\r"
+        puts "\n--- LinuxCNC started, dummy display acknowledged ---"
+    }
+    "error" {
+        puts "Error during LinuxCNC startup"
+        exit 1
+    }
+    timeout {
+        puts "Timeout waiting for LinuxCNC dummy display prompt"
+        exit 1
+    }
+}
+
+# Now wait indefinitely - this keeps the pseudo-terminal alive
+# LinuxCNC needs the display program (this script) to stay running
+puts "--- Keeping terminal connection alive for LinuxCNC ---"
+puts "--- Press Ctrl-C to stop LinuxCNC ---"
+
+# Wait forever (or until LinuxCNC exits on its own)
+set timeout -1
+expect eof
+
+puts "--- LinuxCNC has shut down ---"

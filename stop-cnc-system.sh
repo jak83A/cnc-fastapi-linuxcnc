@@ -31,7 +31,17 @@ else
     echo -e "${YELLOW}⚠${NC}  LinuxCNC not running"
 fi
 
-# Clean up FIFO feeder process
+# Clean up expect process (if using expect-based startup)
+if [ -f "/tmp/linuxcnc_expect.pid" ]; then
+    EXPECT_PID=$(cat "/tmp/linuxcnc_expect.pid" 2>/dev/null)
+    if [ -n "$EXPECT_PID" ] && kill -0 "$EXPECT_PID" 2>/dev/null; then
+        echo "     Stopping expect process (PID: $EXPECT_PID)..."
+        kill "$EXPECT_PID" 2>/dev/null
+    fi
+    rm -f "/tmp/linuxcnc_expect.pid"
+fi
+
+# Clean up FIFO feeder process (legacy, if still present)
 if [ -f "/tmp/linuxcnc_feeder.pid" ]; then
     FEEDER_PID=$(cat "/tmp/linuxcnc_feeder.pid" 2>/dev/null)
     if [ -n "$FEEDER_PID" ] && kill -0 "$FEEDER_PID" 2>/dev/null; then

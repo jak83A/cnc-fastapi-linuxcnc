@@ -132,17 +132,17 @@ verify_config() {
 
 start_linuxcnc() {
     echo -e "${YELLOW}[5/6]${NC} Starting LinuxCNC in headless mode..."
-    
+
     # Clear log
     > "$LINUXCNC_LOG"
-    
+
     # Setup display
     # For true headless operation, we unset DISPLAY entirely
     # This prevents LinuxCNC from trying to connect to any X server
     unset DISPLAY
     unset XAUTHORITY
     echo "     Running in true headless mode (no DISPLAY)"
-    
+
     # Change to config directory
     cd "$CONFIG_DIR"
 
@@ -154,60 +154,73 @@ start_linuxcnc() {
         exit 1
     fi
 
+    # Verify expect is available for dummy display automation
+    if ! command -v expect &> /dev/null; then
+        echo -e "${RED}✗${NC} 'expect' command not found"
+        echo "     Install with: sudo apt-get install expect"
+        exit 1
+    fi
+
     echo "     Config file: $CONFIG_FILE"
     echo "     Working directory: $(pwd)"
 
-    # Start LinuxCNC
-    # Use dummy display which prompts for Enter - we need to keep stdin open
-    # Environment is already set up from load_linuxcnc_env(), so we can use linuxcnc directly
-    echo "     Starting LinuxCNC process..."
+    # Start LinuxCNC using expect script
+    # The expect script handles the dummy display's "press ENTER" prompt
+    # and keeps the pseudo-terminal alive for LinuxCNC
+    echo "     Starting LinuxCNC with expect automation..."
 
-    # Create a FIFO to provide stdin that stays open for dummy display
-    FIFO_PATH="/tmp/linuxcnc_stdin_$$"
-    # Remove if exists, then create fresh
-    rm -f "$FIFO_PATH"
-    mkfifo "$FIFO_PATH"
+    EXPECT_SCRIPT="$FASTAPI_PROJECT_DIR/start_linuxcnc_headless.exp"
+    if [ ! -f "$EXPECT_SCRIPT" ]; then
+        echo -e "${RED}✗${NC} Expect script not found: $EXPECT_SCRIPT"
+        exit 1
+    fi
 
-    # Start feeder process that sends Enter and keeps pipe open
-    (echo; while true; do sleep 3600; done) > "$FIFO_PATH" &
-    FEEDER_PID=$!
+    # Run expect script in background
+    # The script spawns LinuxCNC, sends Enter for dummy display, and stays running
+    nohup "$EXPECT_SCRIPT" "$CONFIG_FILE" > "$LINUXCNC_LOG" 2>&1 &
+    EXPECT_PID=$!
 
-    # Start LinuxCNC reading from FIFO
-    nohup linuxcnc "$CONFIG_FILE" < "$FIFO_PATH" > "$LINUXCNC_LOG" 2>&1 &
-    LINUXCNC_PID=$!
+    # Save expect PID for cleanup
+    echo "$EXPECT_PID" > "/tmp/linuxcnc_expect.pid"
 
-    # Save feeder PID for cleanup
-    echo "$FEEDER_PID" > "/tmp/linuxcnc_feeder.pid"
-    echo "$FIFO_PATH" > "/tmp/linuxcnc_fifo.path"
-    
-    echo "     Waiting for LinuxCNC to initialize (PID: $LINUXCNC_PID)..."
-    
+    echo "     Waiting for LinuxCNC to initialize (Expect PID: $EXPECT_PID)..."
+
     # Wait for successful startup
     MAX_WAIT=30
     SUCCESS=false
-    
+
     for i in $(seq 1 $MAX_WAIT); do
-        # Check if process is still alive
-        if ! kill -0 $LINUXCNC_PID 2>/dev/null; then
+        # Check if expect process is still alive
+        if ! kill -0 $EXPECT_PID 2>/dev/null; then
             echo ""
-            echo -e "${RED}✗${NC} LinuxCNC process died"
+            echo -e "${RED}✗${NC} LinuxCNC/Expect process died"
             echo ""
             echo "Error log:"
-            cat "$LINUXCNC_LOG" | tail -20 | sed 's/^/  /'
+            tail -20 "$LINUXCNC_LOG" | sed 's/^/  /'
             exit 1
         fi
-        
-        # Check for successful startup
+
+        # Check for successful startup indicators
         if grep -q "task: main loop" "$LINUXCNC_LOG" 2>/dev/null; then
             SUCCESS=true
             break
         fi
-        
+
         if pgrep -f "milltask" > /dev/null 2>&1; then
             SUCCESS=true
             break
         fi
-        
+
+        # Check for dummy display acknowledgment
+        if grep -q "dummy display acknowledged" "$LINUXCNC_LOG" 2>/dev/null; then
+            # Give LinuxCNC a moment to fully initialize after dummy display starts
+            sleep 2
+            if pgrep -f "milltask" > /dev/null 2>&1; then
+                SUCCESS=true
+                break
+            fi
+        fi
+
         # Check for errors
         if grep -qi "error.*loading.*hal\|fatal\|cannot open" "$LINUXCNC_LOG" 2>/dev/null; then
             echo ""
@@ -219,18 +232,24 @@ start_linuxcnc() {
             echo "Full log: cat $LINUXCNC_LOG"
             exit 1
         fi
-        
+
         sleep 1
         echo -n "."
     done
-    
+
     echo ""
-    
+
     if [ "$SUCCESS" = true ]; then
-        echo -e "${GREEN}✓${NC} LinuxCNC started successfully (PID: $LINUXCNC_PID)"
+        # Get actual LinuxCNC PID (child of expect)
+        LINUXCNC_PID=$(pgrep -f "milltask" | head -1)
+        echo -e "${GREEN}✓${NC} LinuxCNC started successfully"
+        echo "     Expect PID: $EXPECT_PID"
+        if [ -n "$LINUXCNC_PID" ]; then
+            echo "     Milltask PID: $LINUXCNC_PID"
+        fi
     else
         echo -e "${YELLOW}⚠${NC}  Startup verification timeout"
-        echo "     Process running (PID: $LINUXCNC_PID) but couldn't verify startup"
+        echo "     Process running (Expect PID: $EXPECT_PID) but couldn't verify startup"
         echo "     Check logs: tail -f $LINUXCNC_LOG"
     fi
     echo ""
