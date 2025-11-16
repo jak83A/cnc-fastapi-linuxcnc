@@ -31,6 +31,11 @@ else
     echo -e "${YELLOW}⚠${NC}  LinuxCNC not running"
 fi
 
+# Clean up main LinuxCNC PID file
+if [ -f "/tmp/linuxcnc_main.pid" ]; then
+    rm -f "/tmp/linuxcnc_main.pid"
+fi
+
 # Clean up expect process (if using expect-based startup)
 if [ -f "/tmp/linuxcnc_expect.pid" ]; then
     EXPECT_PID=$(cat "/tmp/linuxcnc_expect.pid" 2>/dev/null)
