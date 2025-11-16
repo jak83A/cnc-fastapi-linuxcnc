@@ -158,10 +158,10 @@ start_linuxcnc() {
     echo "     Working directory: $(pwd)"
 
     # Start LinuxCNC
-    # Use dummy display which prompts for Enter - we pipe yes to auto-confirm
+    # Use dummy display which prompts for Enter - we pipe echo to auto-confirm
     echo "     Starting LinuxCNC process..."
-    # Pipe "yes" to automatically press Enter for dummy display prompt
-    nohup bash -c "yes '' | linuxcnc '$CONFIG_FILE'" > "$LINUXCNC_LOG" 2>&1 &
+    # Pipe single newline to auto-confirm dummy display prompt
+    nohup bash -c "echo | linuxcnc '$CONFIG_FILE'" > "$LINUXCNC_LOG" 2>&1 &
     LINUXCNC_PID=$!
     
     echo "     Waiting for LinuxCNC to initialize (PID: $LINUXCNC_PID)..."
