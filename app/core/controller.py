@@ -210,7 +210,7 @@ class CNCController:
     def home_all_axes(self, wait: bool = True) -> None:
         """
         Home all machine axes.
-        
+
         :param wait: Whether to wait for homing to complete
         :type wait: bool
         :raises EStopActiveException: If E-stop is active
@@ -218,23 +218,40 @@ class CNCController:
         self._ensure_machine_on()
         self._switch_to_mdi_mode()
         self._poll_status()
-        
-        num_joints = getattr(self.status, "joints", 0)
+
+        # Get actual number of configured joints
+        joints_attr = getattr(self.status, "joints", 0)
+        if isinstance(joints_attr, int):
+            num_joints = joints_attr
+        elif isinstance(joints_attr, (list, tuple)):
+            num_joints = len(joints_attr)
+        else:
+            num_joints = 0
+
         for joint_index in range(num_joints):
             self.command.home(joint_index)
-        
+
         if wait:
-            self._wait_for_homing_complete()
-    
-    def _wait_for_homing_complete(self) -> None:
+            self._wait_for_homing_complete(num_joints)
+
+    def _wait_for_homing_complete(self, num_joints: int = 0) -> None:
         """
-        Wait until all joints are homed.
+        Wait until all configured joints are homed.
+
+        :param num_joints: Number of joints to wait for (0 = all in homed list)
+        :type num_joints: int
         """
         while True:
             self._poll_status()
             homed = getattr(self.status, "homed", [])
-            if isinstance(homed, (list, tuple)) and homed and all(homed):
-                break
+            if isinstance(homed, (list, tuple)) and homed:
+                # Only check the configured number of joints
+                if num_joints > 0:
+                    joints_to_check = homed[:num_joints]
+                else:
+                    joints_to_check = homed
+                if all(joints_to_check):
+                    break
             time.sleep(self.poll_interval)
     
     def move_absolute(
