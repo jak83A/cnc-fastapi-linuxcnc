@@ -51,5 +51,11 @@ class HomeRequest(BaseModel):
 
 class EmergencyStopRequest(BaseModel):
     """Request model for emergency stop operations."""
-    
+
     reset: bool = Field(False, description="Reset E-stop if True, activate if False")
+
+
+class MachineStateRequest(BaseModel):
+    """Request model for machine power state."""
+
+    on: bool = Field(True, description="Turn machine on if True, off if False")

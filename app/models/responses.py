@@ -52,7 +52,15 @@ class ErrorResponse(BaseModel):
 
 class EmergencyStopResponse(BaseModel):
     """Response model for emergency stop operations."""
-    
+
     success: bool = Field(..., description="Whether operation was successful")
     estop_active: bool = Field(..., description="Current E-stop state")
+    message: str = Field(..., description="Status message")
+
+
+class MachineStateResponse(BaseModel):
+    """Response model for machine power state operations."""
+
+    success: bool = Field(..., description="Whether operation was successful")
+    machine_on: bool = Field(..., description="Current machine power state")
     message: str = Field(..., description="Status message")

@@ -3,8 +3,8 @@
 API routes for system control (homing, E-stop, etc.).
 """
 from fastapi import APIRouter, Depends, HTTPException
-from app.models.requests import HomeRequest, EmergencyStopRequest
-from app.models.responses import HomeResponse, EmergencyStopResponse, ErrorResponse
+from app.models.requests import HomeRequest, EmergencyStopRequest, MachineStateRequest
+from app.models.responses import HomeResponse, EmergencyStopResponse, MachineStateResponse, ErrorResponse
 from app.services.cnc_service import CNCService
 from app.api.dependencies import get_cnc_service
 from app.core.exceptions import CNCException
@@ -52,7 +52,7 @@ async def emergency_stop(
 ) -> EmergencyStopResponse:
     """
     Activate or reset emergency stop.
-    
+
     :param request: E-stop request (reset=True to clear, reset=False to activate)
     :type request: EmergencyStopRequest
     :param cnc_service: CNC service dependency
@@ -66,8 +66,37 @@ async def emergency_stop(
             result = cnc_service.reset_emergency_stop()
         else:
             result = cnc_service.trigger_emergency_stop()
-        
+
         return EmergencyStopResponse(**result)
+    except CNCException as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
+@router.post(
+    "/power",
+    response_model=MachineStateResponse,
+    responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}}
+)
+async def machine_power(
+    request: MachineStateRequest,
+    cnc_service: CNCService = Depends(get_cnc_service)
+) -> MachineStateResponse:
+    """
+    Turn machine on or off.
+
+    :param request: Machine power request (on=True to enable, on=False to disable)
+    :type request: MachineStateRequest
+    :param cnc_service: CNC service dependency
+    :type cnc_service: CNCService
+    :return: Machine power operation result
+    :rtype: MachineStateResponse
+    :raises HTTPException: If operation fails
+    """
+    try:
+        result = cnc_service.set_machine_power(on=request.on)
+        return MachineStateResponse(**result)
     except CNCException as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

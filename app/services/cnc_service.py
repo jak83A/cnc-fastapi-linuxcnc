@@ -156,14 +156,36 @@ class CNCService:
     def reset_emergency_stop(self) -> dict[str, Any]:
         """
         Reset emergency stop state.
-        
+
         :return: E-stop reset result
         :rtype: dict[str, Any]
         """
         self._controller.reset_emergency_stop()
-        
+
         return {
             "success": True,
             "estop_active": False,
             "message": "Emergency stop reset"
+        }
+
+    def set_machine_power(self, on: bool) -> dict[str, Any]:
+        """
+        Turn machine on or off.
+
+        :param on: True to turn on, False to turn off
+        :type on: bool
+        :return: Machine power state result
+        :rtype: dict[str, Any]
+        """
+        if on:
+            self._controller.machine_on()
+            message = "Machine turned on"
+        else:
+            self._controller.machine_off()
+            message = "Machine turned off"
+
+        return {
+            "success": True,
+            "machine_on": on,
+            "message": message
         }

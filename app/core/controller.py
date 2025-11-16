@@ -391,8 +391,27 @@ class CNCController:
     def reset_emergency_stop(self) -> None:
         """
         Reset emergency stop state.
-        
+
         :raises EStopActiveException: If E-stop cannot be reset
         """
         self.command.state(self.linuxcnc.STATE_ESTOP_RESET)
+        self.command.wait_complete()
+
+    def machine_on(self) -> None:
+        """
+        Turn machine on (enable drives).
+
+        :raises EStopActiveException: If E-stop is still active
+        """
+        self._poll_status()
+        if self.status.task_state == self.linuxcnc.STATE_ESTOP:
+            raise EStopActiveException("Cannot turn machine on while E-stop is active")
+        self.command.state(self.linuxcnc.STATE_ON)
+        self.command.wait_complete()
+
+    def machine_off(self) -> None:
+        """
+        Turn machine off (disable drives).
+        """
+        self.command.state(self.linuxcnc.STATE_OFF)
         self.command.wait_complete()
