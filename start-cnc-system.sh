@@ -137,22 +137,11 @@ start_linuxcnc() {
     > "$LINUXCNC_LOG"
     
     # Setup display
-    if command -v Xvfb &> /dev/null; then
-        if ! pgrep -x "Xvfb" > /dev/null; then
-            echo "     Starting Xvfb virtual display..."
-            # Use -ac to disable access control and -nolisten tcp for security
-            # -auth /dev/null disables xauth requirement
-            Xvfb :99 -screen 0 1024x768x24 -ac -nolisten tcp +extension GLX &> /dev/null &
-            sleep 2
-        fi
-        export DISPLAY=:99
-        # Disable xauth requirement completely
-        export XAUTHORITY=/dev/null
-        echo "     Using virtual display: DISPLAY=$DISPLAY"
-    else
-        export DISPLAY=:0
-        echo "     Using display: DISPLAY=$DISPLAY"
-    fi
+    # For true headless operation, we unset DISPLAY entirely
+    # This prevents LinuxCNC from trying to connect to any X server
+    unset DISPLAY
+    unset XAUTHORITY
+    echo "     Running in true headless mode (no DISPLAY)"
     
     # Change to config directory
     cd "$CONFIG_DIR"
