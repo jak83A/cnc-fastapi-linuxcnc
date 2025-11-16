@@ -71,14 +71,19 @@ if [ -f "$FASTAPI_PID_FILE" ]; then
         echo -e "${YELLOW}⚠${NC}  FastAPI PID file exists but process not running"
     fi
     rm -f "$FASTAPI_PID_FILE"
-else
-    # Try to find uvicorn process
-    if pgrep -f "uvicorn.*app.main:app" > /dev/null 2>&1; then
-        pkill -f "uvicorn.*app.main:app" 2>/dev/null
-        echo -e "${GREEN}✓${NC} FastAPI stopped"
-    else
-        echo -e "${YELLOW}⚠${NC}  FastAPI not running"
+fi
+
+# Also kill any remaining uvicorn processes
+if pgrep -f "uvicorn" > /dev/null 2>&1; then
+    pkill -f "uvicorn" 2>/dev/null
+    sleep 1
+    # Force kill if still running
+    if pgrep -f "uvicorn" > /dev/null 2>&1; then
+        pkill -9 -f "uvicorn" 2>/dev/null
     fi
+    echo -e "${GREEN}✓${NC} All uvicorn processes stopped"
+elif [ ! -f "$FASTAPI_PID_FILE" ]; then
+    echo -e "${YELLOW}⚠${NC}  FastAPI not running"
 fi
 
 # Stop Xvfb
