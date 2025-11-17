@@ -1,5 +1,5 @@
 loadrt hostmot2
-loadrt hm2_eth board_ip=10.10.10.11
+loadrt hm2_eth board_ip=10.10.10.11 config="firmware=hm2/7i92/7i92t_benezan_5abobd.bin"
 loadrt trivkins coordinates=XYZ
 loadrt motmod servo_period_nsec=1000000 num_joints=3
 
